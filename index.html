@@ -553,6 +553,20 @@ const API_URL_AGENCY = 'https://script.google.com/macros/s/AKfycby5C9K-eg9XO0FFx
 const CACHE_KEY = 'zz_cache_agency_v1';
 // ══════════════════════════════════════════════════════════════
 
+// Las fotos vienen de Cloudinary en su tamaño original (varios MB cada
+// una, tal cual se subieron desde el celular). Cloudinary permite pedir
+// una versión redimensionada/comprimida agregando parámetros en la
+// misma URL — sin esto, la Galería intentaba bajar decenas de fotos a
+// resolución completa al mismo tiempo, de ahí la lentitud.
+function cloudinaryOptimizar(url, anchoPx) {
+  if (!url || typeof url !== 'string') return url;
+  const marcador = '/upload/';
+  const i = url.indexOf(marcador);
+  if (i === -1) return url; // no es una URL de Cloudinary, se deja igual
+  const transform = 'w_' + anchoPx + ',q_auto,f_auto,c_limit/';
+  return url.slice(0, i + marcador.length) + transform + url.slice(i + marcador.length);
+}
+
 
 // ══════════════════════════════════════════════════════════════
 //  SISTEMA DE LOGIN — cada agencia tiene su propio usuario y
@@ -751,6 +765,7 @@ async function fetchFresh(esReintento) {
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
+    if (json.sessionExpired) { forzarLogoutPorExpiracion(); return; }
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
     DATA = json.data;
     setCache(DATA);
@@ -1068,7 +1083,7 @@ function renderCard(v) {
   const fotoCard = localStorage.getItem('zz_foto_' + v.codigo) || v.foto;
   const fotoPosCard = localStorage.getItem('zz_fotopos_' + v.codigo) || 'center';
   const fHtml = fotoCard
-    ? '<img src="' + fotoCard + '" alt="foto" style="width:100%;height:100%;object-fit:cover;object-position:' + fotoPosCard + '">'
+    ? '<img src="' + cloudinaryOptimizar(fotoCard, 500) + '" alt="foto" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;object-position:' + fotoPosCard + '">'
     : '<div class="photo-placeholder"><div class="icon">📷</div><span>Sin foto</span></div>';
   const isVenc = v.alerta && v.alerta.includes('VENCIDO');
   const aHtml = v.alerta ? '<span class="alerta-tag ' + (isVenc ? 'at-danger' : 'at-warn') + '">' + v.alerta + '</span>' : '';
@@ -1283,7 +1298,7 @@ function openModal(codigo) {
   // Visor con zoom + arrastre
   const fotoVisor = fotoLocal
     ? `<div id="fotoVisorWrap" style="position:relative;overflow:hidden;border-radius:10px;background:#111;height:320px;cursor:grab;user-select:none" onwheel="zoomFoto(event)" onmousedown="startDragFoto(event)" title="Rueda: zoom · Arrastrar: mover">
-        <img id="modalFotoImg" src="${fotoLocal}" alt="foto" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(1);transition:transform .1s;width:100%;height:100%;object-fit:contain;transform-origin:center center;pointer-events:none">
+        <img id="modalFotoImg" src="${cloudinaryOptimizar(fotoLocal, 1000)}" alt="foto" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(1);transition:transform .1s;width:100%;height:100%;object-fit:contain;transform-origin:center center;pointer-events:none">
         <div style="position:absolute;bottom:8px;right:8px;display:flex;gap:5px;z-index:10">
           <button onclick="event.stopPropagation();ajustarZoom(0.2)" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.2);border-radius:5px;color:#fff;font-size:14px;width:28px;height:28px;cursor:pointer;line-height:1">+</button>
           <button onclick="event.stopPropagation();resetZoom()" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.2);border-radius:5px;color:#fff;font-size:11px;width:28px;height:28px;cursor:pointer;line-height:1">⟳</button>
@@ -1626,7 +1641,7 @@ function updateMapMarkers() {
     const marker = L.marker([lat, lon], { icon: makeMarkerIcon(color) });
 
     const fotoTag = v.foto && String(v.foto).startsWith('http')
-      ? `<img src="${v.foto}" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px">` : '';
+      ? `<img src="${cloudinaryOptimizar(v.foto, 300)}" loading="lazy" decoding="async" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px">` : '';
     const popupHtml = `<div class="map-popup">
       ${fotoTag}
       <div class="pop-estado" style="background:rgba(16,185,129,.15);color:#10b981">DISPONIBLE</div>
@@ -2125,6 +2140,7 @@ async function enviarSolicitudCotizacion() {
       })
     });
     const json = await res.json();
+    if (json.sessionExpired) { cerrarCotizacion(); forzarLogoutPorExpiracion(); return; }
     if (!json.ok) throw new Error(json.error || 'No se pudo enviar la solicitud');
 
     cerrarCotizacion();
