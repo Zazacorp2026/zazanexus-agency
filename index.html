@@ -503,7 +503,11 @@
       </div>
       <div class="form-group" style="margin-bottom:12px">
         <label>Período deseado</label>
-        <input type="text" id="cotizPeriodo" placeholder="Ej. Septiembre 2026, o 01/09 - 30/09" style="width:100%">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="date" id="cotizPeriodoInicio" style="flex:1;color-scheme:dark">
+          <span style="color:var(--muted);font-size:12px">hasta</span>
+          <input type="date" id="cotizPeriodoFin" style="flex:1;color-scheme:dark">
+        </div>
       </div>
       <div class="form-group" style="margin-bottom:16px">
         <label>Observaciones (opcional)</label>
@@ -2108,7 +2112,8 @@ function abrirCotizacionModal() {
     '<span class="ancla-chip" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px">' + v.codigo + '</span>'
   ).join('');
   document.getElementById('cotizAnunciante').value = '';
-  document.getElementById('cotizPeriodo').value = '';
+  document.getElementById('cotizPeriodoInicio').value = '';
+  document.getElementById('cotizPeriodoFin').value = '';
   document.getElementById('cotizObservaciones').value = '';
   document.getElementById('cotizOverlay').classList.add('open');
 }
@@ -2117,13 +2122,23 @@ function cerrarCotizacion() {
   document.getElementById('cotizOverlay').classList.remove('open');
 }
 
+function formatearFechaEs(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return d + '/' + m + '/' + y;
+}
+
 async function enviarSolicitudCotizacion() {
   const anunciante = document.getElementById('cotizAnunciante').value.trim();
-  const periodo = document.getElementById('cotizPeriodo').value.trim();
+  const fIni = document.getElementById('cotizPeriodoInicio').value;
+  const fFin = document.getElementById('cotizPeriodoFin').value;
+  const periodo = (fIni && fFin) ? (formatearFechaEs(fIni) + ' – ' + formatearFechaEs(fFin))
+    : (fIni ? 'Desde ' + formatearFechaEs(fIni) : (fFin ? 'Hasta ' + formatearFechaEs(fFin) : ''));
   const observaciones = document.getElementById('cotizObservaciones').value.trim();
   const err = document.getElementById('cotizAnunciante');
 
   if (!anunciante) { showToast('❌ Ingresa el nombre del anunciante', 'error'); err.focus(); return; }
+  if (fIni && fFin && fFin < fIni) { showToast('❌ La fecha de fin no puede ser antes que la de inicio', 'error'); return; }
   if (!_tokenAgencia) { showToast('❌ Tu sesión expiró, ingresa de nuevo', 'error'); return; }
 
   const btn = document.getElementById('btnEnviarCotizacion');
@@ -2136,7 +2151,7 @@ async function enviarSolicitudCotizacion() {
         action: 'agSolicitarCotizacion',
         token: _tokenAgencia,
         anunciante, periodo, observaciones,
-        elementos: _cotizElementos.map(v => ({ codigo: v.codigo, direccion: v.direccion, tipo: v.tipo, medidas: v.medidas, lugar: v.lugar }))
+        elementos: _cotizElementos.map(v => ({ codigo: v.codigo, direccion: v.direccion, tipo: v.tipo, medidas: v.medidas, lugar: v.lugar, foto: v.foto || '' }))
       })
     });
     const json = await res.json();
