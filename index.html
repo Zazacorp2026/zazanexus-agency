@@ -1745,7 +1745,7 @@ function renderMapa(container) {
       <input type="text" class="search-box" id="mapSearch" placeholder="🔍 Buscar código o dirección..." oninput="updateMapMarkers()" style="max-width:280px">
     </div>
     <div class="map-legend">
-      <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Disponible</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F4491A"></div> Disponible</div>
       <div class="legend-item" style="margin-left:auto;font-family:monospace;font-size:11px;color:var(--muted)" id="mapCount"></div>
     </div>
     <div id="mapContainer"></div>`;
@@ -1799,7 +1799,7 @@ function renderMapa(container) {
 
 function getMarkerColor(v) {
   if (isBlocked(v.codigo)) return '#8b5cf6';
-  if (v.estado === 'DISPONIBLE') return '#10b981';
+  if (v.estado === 'DISPONIBLE') return '#F4491A';
   if (v.estado === 'RESERVADA')  return '#f59e0b';
   if (v.estado === 'CONTRATADA') return '#ef4444';
   return '#6b7280';
