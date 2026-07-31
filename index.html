@@ -407,8 +407,10 @@
       <img id="loginLogo" style="height:110px;width:auto;margin-bottom:8px" alt="Zazacorp">
     </div>
     <div class="login-field">
-      <label>Usuario (agencia)</label>
-      <input type="text" id="loginUser" placeholder="Nombre de usuario" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+      <label>Agencia</label>
+      <select id="loginUser">
+        <option value="">Selecciona tu agencia...</option>
+      </select>
     </div>
     <div class="login-field">
       <label>Contraseña</label>
@@ -3579,6 +3581,26 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 // Set header logo
 document.getElementById('headerLogo').src = 'data:' + LOGO_NARANJA;
 document.getElementById('loginLogo').src   = 'data:' + LOGO_NARANJA;
+
+// Llena el desplegable de agencias con las que estén activas en el
+// Sheet — así, si se agrega/desactiva una agencia, el desplegable se
+// actualiza solo, sin tener que tocar este archivo.
+async function cargarListaAgencias() {
+  const sel = document.getElementById('loginUser');
+  if (!sel) return;
+  try {
+    const res = await fetch(API_URL_AGENCY + '?action=agListarAgencias&_t=' + Date.now(), { cache: 'no-store' });
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.agencias)) return;
+    data.agencias.forEach(ag => {
+      const opt = document.createElement('option');
+      opt.value = ag.usuario;
+      opt.textContent = ag.nombre;
+      sel.appendChild(opt);
+    });
+  } catch (e) { /* si falla, el login normal por texto ya no está — pero al menos no rompe la página */ }
+}
+cargarListaAgencias();
 
 // Verificar sesión al cargar — si hay sesión activa, iniciar app; si no, mostrar login
 if (checkLogin()) {
