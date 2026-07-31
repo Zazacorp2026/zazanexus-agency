@@ -626,8 +626,11 @@ async function doLogin() {
   if (!pass)  { err.textContent = 'Ingresa tu contraseña'; return; }
 
   err.textContent = '';
+  let ip = '';
+  try { const ipRes = await fetch('https://api.ipify.org?format=json'); ip = (await ipRes.json()).ip || ''; } catch (e) {}
   try {
-    const url = API_URL_AGENCY + '?action=agLogin&user=' + encodeURIComponent(user) + '&pass=' + encodeURIComponent(pass) + '&_t=' + Date.now();
+    const url = API_URL_AGENCY + '?action=agLogin&user=' + encodeURIComponent(user) + '&pass=' + encodeURIComponent(pass)
+      + '&ip=' + encodeURIComponent(ip) + '&ua=' + encodeURIComponent(navigator.userAgent) + '&_t=' + Date.now();
     const res = await fetch(url, { cache: 'no-store' });
     const data = await res.json();
     if (!data.ok) {
