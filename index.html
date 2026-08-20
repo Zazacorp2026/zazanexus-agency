@@ -491,7 +491,7 @@
 
 <div id="configBanner" style="display:none" class="config-banner">
   <strong>⚙️ Configuración pendiente</strong>
-  Reemplaza <code>https://script.google.com/macros/s/AKfycbz7oqjdh-S_Fqn1svez5rprXrWsA_UtB8tqmLwvQoMcurIfThjYw8FWYa-LLCLdIx-TUw/exec</code> en este archivo con la URL de tu Apps Script Web App.<br>
+  Falta configurar la URL del Apps Script (constante <code>API_URL_AGENCY</code>) en este archivo.<br>
   Mientras tanto, el sistema funciona con datos de ejemplo del último caché.
 </div>
 
@@ -802,7 +802,12 @@ let _ultimaFirmaDisponibles = '';
 async function fetchFresh(esReintento) {
   if (!_tokenAgencia) { forzarLogoutPorExpiracion(); return; }
   try {
-    const url = API_URL_AGENCY + '?action=agGetDisponibles&token=' + encodeURIComponent(_tokenAgencia) + '&_t=' + Date.now();
+    // El backend ahora manda SOLO disponibles. Las contratadas/reservadas
+    // llegan únicamente si se pide un mes futuro (filtro "Disponibles a
+    // partir de"), y solo las que se liberan hasta ese mes.
+    const mes = state.filterMesDisp || '';
+    const url = API_URL_AGENCY + '?action=agGetDisponibles&token=' + encodeURIComponent(_tokenAgencia) +
+      (mes ? '&mes=' + encodeURIComponent(mes) : '') + '&_t=' + Date.now();
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
@@ -810,7 +815,10 @@ async function fetchFresh(esReintento) {
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
     DATA = json.data;
     _ultimaFirmaDisponibles = firmaDatos(DATA);
-    setCache(DATA);
+    // Solo se cachea la vista normal (sin mes): si se guardara el
+    // resultado de un mes futuro, al reabrir la app aparecerían
+    // contratadas mezcladas con las disponibles reales.
+    if (!mes) setCache(DATA);
     document.getElementById('connDot').className = 'conn-dot ok';
     onDataLoaded();
   } catch (err) {
@@ -1071,12 +1079,16 @@ function switchTab(t) {
   render();
 }
 
-function aplicarFiltroMes(val) {
+async function aplicarFiltroMes(val) {
   state.filterMesDisp = val || '';
   state.page = 1;
   const btn = document.getElementById('btnClearMes');
   if (btn) btn.style.display = val ? 'block' : 'none';
+  // Las que se liberan a futuro ya no están en DATA (el backend solo
+  // manda disponibles), así que hay que volver a pedirlas indicando
+  // el mes. Al limpiar el filtro se recarga la vista normal.
   render();
+  await fetchFresh();
 }
 
 function poblarSelectoresMes() {
@@ -1113,7 +1125,7 @@ function limpiarFiltroMes(silent) {
   if (selAnio) selAnio.value = '';
   const btn = document.getElementById('btnClearMes');
   if (btn) btn.style.display = 'none';
-  if (!silent) { state.page = 1; render(); }
+  if (!silent) { state.page = 1; render(); fetchFresh().catch(() => {}); }
 }
 
 function applyFilters() {
