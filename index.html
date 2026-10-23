@@ -1849,7 +1849,7 @@ function renderMapa(container) {
     <div class="map-filter-bar">
       <select class="filter" id="mapEstadoFilter" onchange="updateMapMarkers()">
         <option value="">Todos los estados</option>
-        <option value="DISPONIBLE">🟠 Disponibles</option>
+        <option value="DISPONIBLE">🟢 Disponibles</option>
         <option value="RESERVADA">🟡 Reservadas</option>
         <option value="CONTRATADA">🔴 Contratadas</option>
       </select>
@@ -1859,7 +1859,7 @@ function renderMapa(container) {
       <input type="text" class="search-box" id="mapSearch" placeholder="🔍 Buscar código o dirección..." oninput="updateMapMarkers()" style="max-width:280px">
     </div>
     <div class="map-legend">
-      <div class="legend-item"><div class="legend-dot" style="background:#F4491A"></div> Disponible</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Disponible</div>
       <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Reservada</div>
       <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Contratada</div>
       <div class="legend-item" style="margin-left:auto;font-family:monospace;font-size:11px;color:var(--muted)" id="mapCount"></div>
@@ -1931,7 +1931,7 @@ function getMarkerColor(v) {
   const e = estadoEfectivo(v);
   if (e === 'RESERVADA')  return '#f59e0b';
   if (e === 'CONTRATADA') return '#ef4444';
-  if (e === 'DISPONIBLE') return '#F4491A';
+  if (e === 'DISPONIBLE') return '#10b981';
   return '#6b7280';
 }
 
@@ -1965,7 +1965,7 @@ function makeGroupMarkerIcon(colores) {
 function mapPopupItem_(v, compacto) {
   const est   = estadoEfectivo(v);
   const color = getMarkerColor(v);
-  const bg    = est === 'DISPONIBLE' ? 'rgba(244,73,26,.15)'
+  const bg    = est === 'DISPONIBLE' ? 'rgba(16,185,129,.15)'
               : est === 'RESERVADA'  ? 'rgba(245,158,11,.15)'
                                      : 'rgba(239,68,68,.12)';
   const fotoTag = v.foto && String(v.foto).startsWith('http')
