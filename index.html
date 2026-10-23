@@ -264,7 +264,9 @@
   .config-banner code{background:rgba(0,0,0,.3);padding:2px 6px;border-radius:4px;font-family:'DM Mono',monospace;font-size:11px;}
 
   .eb-BLOQUEADA{background:rgba(139,92,246,.15);color:#8b5cf6;}
-  .countdown{font-family:'DM Mono',monospace;font-size:11px;color:#8b5cf6;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.25);border-radius:6px;padding:4px 8px;display:inline-flex;align-items:center;gap:5px;margin-top:5px;}
+  .countdown{font-family:'DM Mono',monospace;font-size:11px;color:var(--yellow);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:5px 8px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;text-align:center;gap:4px;margin-top:9px;}
+  .cola-badge{font-size:10px;color:#8b5cf6;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:6px;padding:4px 8px;display:flex;align-items:center;justify-content:center;gap:5px;margin-top:5px;}
+  .cinta-reservada{position:absolute;top:10px;left:0;background:var(--yellow);color:#0a0c10;font-size:9px;font-weight:700;padding:3px 10px;letter-spacing:.5px;border-radius:0 4px 4px 0;z-index:2;}
   .countdown .lock{font-size:12px;}
   .block-info{background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.25);border-radius:8px;padding:12px 14px;margin-top:12px;}
   .block-info h5{font-size:11px;color:#8b5cf6;margin-bottom:6px;font-weight:700;}
@@ -873,6 +875,15 @@ async function refrescarSilencioso() {
   } catch (e) { /* silencioso — se reintenta solo en el próximo ciclo de 20s */ }
 }
 setInterval(refrescarSilencioso, 20000);
+
+// Mantiene vivas las cuentas regresivas de las reservas sin volver a
+// pintar toda la galería (solo toca el texto del contador).
+setInterval(() => {
+  document.querySelectorAll('[data-libera]').forEach(el => {
+    const b = el.querySelector('b');
+    if (b) b.textContent = textoCuentaRegresiva(el.dataset.libera);
+  });
+}, 1000);
 // Al volver a la pestaña (ej. el celular se bloqueó y se desbloqueó),
 // revisar de inmediato en vez de esperar hasta 20s.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refrescarSilencioso(); });
@@ -981,7 +992,9 @@ document.addEventListener('click', e => {
 });
 
 function updateStats() {
-  const dispCount = DATA.filter(v => v.estado==='DISPONIBLE' && !isBlocked(v.codigo)).length;
+  // Solo las realmente libres: una reservada (o con bloqueo vigente) no
+  // cuenta como disponible aunque se muestre en la galería.
+  const dispCount = DATA.filter(v => v.estado === 'DISPONIBLE' && !estaReservada(v)).length;
   document.getElementById('st-disp').textContent  = '● ' + dispCount + ' DISP.';
 }
 
@@ -1014,14 +1027,16 @@ function getFiltered() {
       // sistema interno de contratos LED, que aquí no existe) — se trata igual
       // que cualquier otro elemento, solo por su campo estado.
       d = d.filter(v => {
-        if (v.estado === 'DISPONIBLE' && !isBlocked(v.codigo)) return true;
-        if ((v.estado === 'CONTRATADA' || v.estado === 'RESERVADA') && v.termino) {
+        if (v.estado === 'DISPONIBLE' || v.estado === 'RESERVADA') return true;
+        if (v.estado === 'CONTRATADA' && v.termino) {
           return v.termino.substring(0, 7) <= state.filterMesDisp;
         }
         return false;
       });
     } else {
-      d = d.filter(v => v.estado === 'DISPONIBLE' && !isBlocked(v.codigo));
+      // Las reservadas se muestran junto a las disponibles, con su
+      // cuenta regresiva: el backend solo manda estas dos.
+      d = d.filter(v => v.estado === 'DISPONIBLE' || v.estado === 'RESERVADA');
     }
   }
   else if (state.tab === 'nuevos') d = d.filter(v => v.estado === 'DISPONIBLE' && state.nuevosHoy && state.nuevosHoy.has(v.codigo));
@@ -1165,6 +1180,44 @@ function ec(e) {
   return e === 'DISPONIBLE' ? 'eb-DISPONIBLE' : e === 'CONTRATADA' ? 'eb-CONTRATADA' : e === 'RESERVADA' ? 'eb-RESERVADA' : 'eb-default';
 }
 
+// ══════════════════════════════════════════════════════════════
+//  RESERVADAS — la agencia ve cuánto falta para que se liberen y si
+//  hay una segunda reserva en cola, pero nunca de quién son. El
+//  backend solo envía la fecha (liberaEn) y un booleano (enCola).
+// ══════════════════════════════════════════════════════════════
+function reservaVigente(v) {
+  if (!v.liberaEn) return false;
+  const t = new Date(v.liberaEn).getTime();
+  return !isNaN(t) && t > Date.now();
+}
+
+// Una valla puede estar RESERVADA, o estar DISPONIBLE pero con un
+// bloqueo de 48h activo — para la agencia las dos son lo mismo.
+function estaReservada(v) {
+  return v.estado === 'RESERVADA' || reservaVigente(v);
+}
+
+function textoCuentaRegresiva(liberaEn) {
+  const ms = new Date(liberaEn).getTime() - Date.now();
+  if (isNaN(ms) || ms <= 0) return 'por liberarse';
+  const h = Math.floor(ms / 3600000), m = Math.floor(ms % 3600000 / 60000), s = Math.floor(ms % 60000 / 1000);
+  const d = Math.floor(h / 24);
+  return d > 0 ? (d + 'd ' + (h % 24) + 'h ' + m + 'm')
+               : (h + 'h ' + m + 'm ' + String(s).padStart(2, '0') + 's');
+}
+
+// Lo que va al pie de la card en modo agencia (siempre solo lectura).
+function bloqueAgencia(v) {
+  if (!estaReservada(v)) {
+    return '<div style="font-size:11px;color:var(--muted);text-align:center;padding:6px;opacity:.7">👁️ Solo lectura</div>';
+  }
+  const cd = v.liberaEn
+    ? '<div class="countdown" data-libera="' + v.liberaEn + '">⏳ Tiempo restante 1ª reserva&nbsp; <b>' + textoCuentaRegresiva(v.liberaEn) + '</b></div>'
+    : '';
+  const cola = v.enCola ? '<div class="cola-badge">🔔 Segunda reserva en cola</div>' : '';
+  return cd + cola;
+}
+
 function renderCard(v) {
   const fotoCard = localStorage.getItem('zz_foto_' + v.codigo) || v.foto;
   const fotoPosCard = localStorage.getItem('zz_fotopos_' + v.codigo) || 'center';
@@ -1185,11 +1238,16 @@ function renderCard(v) {
   }
   const efectivoReservada = v.estado === 'RESERVADA' || bloqueo;
   const esLEDv = (v.tipo || '').toUpperCase().indexOf('LED') >= 0;
-  const rBtn = esLEDv
+  // En modo agencia todos los elementos se tratan igual, LED incluidos.
+  // Antes los LED entraban por una rama aparte que mostraba
+  // "N espacios disponibles" calculado con los contratos LED del
+  // sistema interno — datos que esta versión nunca recibe, así que el
+  // número que salía era siempre 15, inventado.
+  const rBtn = isReadOnly() ? bloqueAgencia(v)
+    : esLEDv
     ? (state.tab === 'disponibles'
         ? '<div style="font-size:11px;color:var(--accent);text-align:center;padding:6px;font-weight:700">📺 ' + espaciosLEDDisponibles(v) + ' espacios disponibles</div>'
         : '<div style="font-size:10px;color:var(--muted);text-align:center;padding:4px">Se contrata desde la pestaña LED</div>')
-    : isReadOnly() ? '<div style="font-size:11px;color:var(--muted);text-align:center;padding:6px;opacity:.7">👁️ Solo lectura</div>'
     : v.estado === 'DISPONIBLE'
     ? bloqueo
       ? '<div class="countdown" data-countdown="' + bloqueo.expira + '" data-codigo="' + v.codigo + '">🔒 calculando...</div>' +
@@ -1215,9 +1273,9 @@ function renderCard(v) {
   const cardOnClick = multiSelectInvMode && state.tab === 'inventario' ? 'toggleInvCard(event,\'' + v.codigo + '\')' : ((multiSelectMode && isDisp) ? 'selValla(event,this)' : 'openModal(\'' + v.codigo + '\')');
   return '<div class="card' + selClass + '" data-codigo="' + v.codigo + '" onclick="' + cardOnClick + '">' +
     (chkInv || chk) +
-    '<div class="card-photo">' + fHtml + '</div>' +
+    '<div class="card-photo">' + (estaReservada(v) ? '<span class="cinta-reservada">RESERVADA</span>' : '') + fHtml + '</div>' +
     '<div class="card-body">' +
-      '<div class="card-header"><div class="card-codigo">' + v.codigo + '</div>' + (esProximaDisp ? badgeEstado : '<div class="estado-badge ' + (bloqueo ? 'eb-RESERVADA' : ec(v.estado)) + '">' + (bloqueo ? 'RESERVADA' : v.estado) + '</div>') + '</div>' +
+      '<div class="card-header"><div class="card-codigo">' + v.codigo + '</div>' + (esProximaDisp ? badgeEstado : '<div class="estado-badge ' + (estaReservada(v) ? 'eb-RESERVADA' : ec(v.estado)) + '">' + (estaReservada(v) ? 'RESERVADA' : v.estado) + '</div>') + '</div>' +
       '<div class="card-dir">' + v.direccion + '</div>' +
       '<div class="card-meta"><span class="meta-tag">' + v.tipo + '</span>' + (v.medidas ? '<span class="meta-tag">' + v.medidas + '</span>' : '') + '<span class="meta-tag">' + v.lugar + '</span></div>' +
       aHtml +
@@ -1233,8 +1291,11 @@ function renderCard(v) {
         const color = diff <= 30 ? '#f59e0b' : diff <= 60 ? '#fb923c' : 'var(--muted)';
         return '<div style="font-size:9px;color:' + color + ';margin-bottom:6px;font-weight:600">📅 Fin en: ' + txt + '</div>';
       })() : '') +
-      '<div class="card-footer"><div><div class="card-cliente">' + (v.cliente || (v.estado === 'DISPONIBLE' ? '' : '—')) + '</div><div class="card-ejecutiva">' + (v.ejecutiva || '') + '</div></div>' +
-      (v.valor ? '<div style="font-family:monospace;font-size:10px;color:var(--muted)">$' + Number(v.valor).toLocaleString() + '</div>' : '') + '</div>' +
+      // Cliente, ejecutiva y precio nunca llegan en modo agencia, así que
+      // este bloque solo dejaba un "—" suelto: se omite por completo.
+      (isReadOnly() ? '' :
+        '<div class="card-footer"><div><div class="card-cliente">' + (v.cliente || (v.estado === 'DISPONIBLE' ? '' : '—')) + '</div><div class="card-ejecutiva">' + (v.ejecutiva || '') + '</div></div>' +
+        (v.valor ? '<div style="font-family:monospace;font-size:10px;color:var(--muted)">$' + Number(v.valor).toLocaleString() + '</div>' : '') + '</div>') +
       rBtn + '</div></div>';
 }
 
@@ -1350,7 +1411,9 @@ function openModal(codigo) {
       '<button class="btn-desbloquear-admin" onclick="desbloquearAdmin(\'' + v.codigo + '\')">🔓 Desbloquear ahora</button></div>';
   } else if (v.estado === 'DISPONIBLE') {
     rSec = isReadOnly()
-      ? '<button class="btn-reservar" style="width:100%" onclick="abrirCotizacionUnitaria(\'' + v.codigo + '\')">📩 Solicitar cotización</button>'
+      ? (estaReservada(v)
+          ? bloqueAgencia(v)
+          : '<button class="btn-reservar" style="width:100%" onclick="abrirCotizacionUnitaria(\'' + v.codigo + '\')">📩 Solicitar cotización</button>')
       : '<div class="reserve-form"><h4>🟢 Reservar este elemento</h4>' +
       '<div class="form-row">' +
         '<div class="form-group"><label>Cliente</label><input type="text" id="rf-c" placeholder="Nombre del cliente"></div>' +
@@ -1364,7 +1427,7 @@ function openModal(codigo) {
       '<button class="btn-reservar" id="btnReservar" onclick="hacerReserva(\'' + v.codigo + '\')">✓ Confirmar Reserva</button></div>';
   } else if (v.estado === 'RESERVADA') {
     rSec = isReadOnly()
-      ? '<div style="font-size:11px;color:var(--muted);text-align:center;padding:10px;opacity:.7">👁️ Solo consulta</div>'
+      ? bloqueAgencia(v)
       : '<div class="reserva-info"><h5>🟡 RESERVADA</h5>' +
       '<p>Cliente: <strong>' + (v.cliente_reserva || v.cliente || '—') + '</strong><br>' +
       'Ejecutiva: <strong>' + (v.ejecutiva_reserva || v.ejecutiva || '—') + '</strong><br>' +
@@ -1758,6 +1821,7 @@ function renderMapa(container) {
     </div>
     <div class="map-legend">
       <div class="legend-item"><div class="legend-dot" style="background:#F4491A"></div> Disponible</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Reservada</div>
       <div class="legend-item" style="margin-left:auto;font-family:monospace;font-size:11px;color:var(--muted)" id="mapCount"></div>
     </div>
     <div id="mapContainer"></div>`;
@@ -1810,7 +1874,7 @@ function renderMapa(container) {
 }
 
 function getMarkerColor(v) {
-  if (isBlocked(v.codigo)) return '#8b5cf6';
+  if (estaReservada(v)) return '#f59e0b';
   if (v.estado === 'DISPONIBLE') return '#F4491A';
   if (v.estado === 'RESERVADA')  return '#f59e0b';
   if (v.estado === 'CONTRATADA') return '#ef4444';
@@ -1839,7 +1903,9 @@ function updateMapMarkers() {
   // Esta versión solo muestra disponibilidad — nunca reservadas ni
   // contratadas (eso no aporta valor a una agencia y solo genera ruido).
   let filtered = DATA.filter(v => {
-    if (v.estado !== 'DISPONIBLE') return false;
+    // Igual que la galería: disponibles y reservadas. Las contratadas
+    // no llegan desde el backend, así que nunca aparecen en el mapa.
+    if (v.estado !== 'DISPONIBLE' && v.estado !== 'RESERVADA') return false;
     const lat = parseFloat(String(v.lat).replace(' ',''));
     const lon = parseFloat(String(v.lon).replace(' ',''));
     if (isNaN(lat) || isNaN(lon)) return false;
@@ -1861,13 +1927,17 @@ function updateMapMarkers() {
 
     const fotoTag = v.foto && String(v.foto).startsWith('http')
       ? `<img src="${cloudinaryOptimizar(v.foto, 300)}" loading="lazy" decoding="async" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px">` : '';
+    const rsv = estaReservada(v);
+    const colorPop = rsv ? '#f59e0b' : '#10b981';
     const popupHtml = `<div class="map-popup">
       ${fotoTag}
-      <div class="pop-estado" style="background:rgba(16,185,129,.15);color:#10b981">DISPONIBLE</div>
+      <div class="pop-estado" style="background:${rsv ? 'rgba(245,158,11,.15)' : 'rgba(16,185,129,.15)'};color:${colorPop}">${rsv ? 'RESERVADA' : 'DISPONIBLE'}</div>
       <h4>${v.codigo}</h4>
       <p>${v.direccion.substring(0,80)}${v.direccion.length>80?'...':''}</p>
       <p><strong>${v.tipo}</strong> ${v.medidas ? '· '+v.medidas : ''}</p>
-      <button class="pop-btn" style="background:#10b981;color:#000" onclick="document.querySelector('.leaflet-popup-close-button').click();setTimeout(()=>openModal('${v.codigo}'),100)">
+      ${rsv && v.liberaEn ? `<p style="color:#b45309"><b>⏳ Tiempo restante 1ª reserva: ${textoCuentaRegresiva(v.liberaEn)}</b></p>` : ''}
+      ${rsv && v.enCola ? `<p style="color:#6d28d9"><b>🔔 Segunda reserva en cola</b></p>` : ''}
+      <button class="pop-btn" style="background:${colorPop};color:#000" onclick="document.querySelector('.leaflet-popup-close-button').click();setTimeout(()=>openModal('${v.codigo}'),100)">
         Ver detalle
       </button>
     </div>`;
