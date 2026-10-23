@@ -266,6 +266,10 @@
   .eb-BLOQUEADA{background:rgba(139,92,246,.15);color:#8b5cf6;}
   .countdown{font-family:'DM Mono',monospace;font-size:11px;color:var(--yellow);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:5px 8px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;text-align:center;gap:4px;margin-top:9px;}
   .cola-badge{font-size:10px;color:#8b5cf6;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:6px;padding:4px 8px;display:flex;align-items:center;justify-content:center;gap:5px;margin-top:5px;}
+  .contratada-info{font-size:12px;color:#f87171;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.28);border-radius:8px;padding:10px 12px;margin-top:9px;text-align:center;font-weight:600;}
+  .ci-libera{font-family:'DM Mono',monospace;font-size:11px;color:var(--text);font-weight:400;margin-top:6px;}
+  .ci-nota{font-size:11px;color:var(--muted);font-weight:400;margin-top:6px;line-height:1.45;}
+  .map-nota{font-size:11px;color:var(--muted);line-height:1.45;padding:0 0 12px;}
   .cinta-reservada{position:absolute;top:10px;left:0;background:var(--yellow);color:#0a0c10;font-size:9px;font-weight:700;padding:3px 10px;letter-spacing:.5px;border-radius:0 4px 4px 0;z-index:2;}
   .countdown .lock{font-size:12px;}
   .block-info{background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.25);border-radius:8px;padding:12px 14px;margin-top:12px;}
@@ -822,7 +826,12 @@ async function fetchFresh(esReintento) {
     // contratadas mezcladas con las disponibles reales.
     if (!mes) setCache(DATA);
     document.getElementById('connDot').className = 'conn-dot ok';
+    // Conservar la posición de scroll al redibujar, igual que hace el
+    // refresco silencioso: sin esto, cada recarga de datos te devuelve
+    // al principio de la lista y se siente como un salto.
+    const scrollPrevio = window.scrollY;
     onDataLoaded();
+    window.scrollTo(0, scrollPrevio);
   } catch (err) {
     console.warn('Error cargando datos:', err.message);
     if (!esReintento) {
@@ -856,7 +865,13 @@ function loadFromCache() {
 async function refrescarSilencioso() {
   if (!_tokenAgencia || document.hidden) return; // no gastar llamadas si la pestaña ni se está viendo
   try {
-    const url = API_URL_AGENCY + '?action=agGetDisponibles&token=' + encodeURIComponent(_tokenAgencia) + '&_t=' + Date.now();
+    // Debe pedir EXACTAMENTE el mismo conjunto que fetchFresh: si se
+    // olvida el mes, el refresco trae solo las disponibles, DATA pierde
+    // las que se liberan a futuro y la pantalla salta cada 20 segundos
+    // mientras el filtro de fecha está puesto.
+    const mesAct = state.filterMesDisp || '';
+    const url = API_URL_AGENCY + '?action=agGetDisponibles&token=' + encodeURIComponent(_tokenAgencia) +
+      (mesAct ? '&mes=' + encodeURIComponent(mesAct) : '') + '&_t=' + Date.now();
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return;
     const json = await res.json();
@@ -922,8 +937,12 @@ function getCache() {
 
 // ── FILTROS ──────────────────────────────────────────────────
 function populateFilters() {
-  const ciudades = [...new Set(DATA.map(v => v.lugar).filter(Boolean))].sort();
-  const tipos    = [...new Set(DATA.map(v => v.tipo).filter(Boolean))].sort();
+  // Solo lo que la galería puede llegar a listar (disponibles y reservadas).
+  // Desde que el mapa recibe el inventario completo, DATA también trae
+  // contratadas, y ofrecer sus ciudades acá daría filtros con cero resultados.
+  const enGaleria = DATA.filter(v => v.estado === 'DISPONIBLE' || v.estado === 'RESERVADA');
+  const ciudades = [...new Set(enGaleria.map(v => v.lugar).filter(Boolean))].sort();
+  const tipos    = [...new Set(enGaleria.map(v => v.tipo).filter(Boolean))].sort();
   buildMF('mf-ciudad', ciudades, 'filterCiudad', 'Todas las ciudades');
   buildMF('mf-tipo',   tipos,    'filterTipo',   'Todos los tipos');
 }
@@ -1102,7 +1121,10 @@ async function aplicarFiltroMes(val) {
   // Las que se liberan a futuro ya no están en DATA (el backend solo
   // manda disponibles), así que hay que volver a pedirlas indicando
   // el mes. Al limpiar el filtro se recarga la vista normal.
-  render();
+  //
+  // Un solo dibujado: antes se hacía render() aquí y fetchFresh volvía
+  // a dibujar al llegar la respuesta, y ese doble repintado era el
+  // "salto" que se veía al elegir la fecha.
   await fetchFresh();
 }
 
@@ -1140,7 +1162,8 @@ function limpiarFiltroMes(silent) {
   if (selAnio) selAnio.value = '';
   const btn = document.getElementById('btnClearMes');
   if (btn) btn.style.display = 'none';
-  if (!silent) { state.page = 1; render(); fetchFresh().catch(() => {}); }
+  // Igual que aplicarFiltroMes: un solo dibujado, el de fetchFresh.
+  if (!silent) { state.page = 1; fetchFresh().catch(() => {}); }
 }
 
 function applyFilters() {
@@ -1425,6 +1448,14 @@ function openModal(codigo) {
         '<div class="form-group"><label>Observaciones</label><input type="text" id="rf-o" placeholder="Notas opcionales..."></div>' +
       '</div>' +
       '<button class="btn-reservar" id="btnReservar" onclick="hacerReserva(\'' + v.codigo + '\')">✓ Confirmar Reserva</button></div>';
+  } else if (v.estado === 'CONTRATADA' && isReadOnly()) {
+    // Se abre desde el mapa. Informativo y nada más: ni anunciante,
+    // ni ejecutiva, ni valor.
+    rSec = '<div class="contratada-info">\u26d4 Espacio contratado'
+      + (v.termino ? '<div class="ci-libera">Se libera el <b>' + v.termino + '</b></div>' : '')
+      + '<div class="ci-nota">Si te interesa para cuando se libere, pide la cotizaci\u00f3n y una ejecutiva te contacta.</div>'
+      + '</div>'
+      + '<button class="btn-reservar" style="width:100%;margin-top:9px" onclick="abrirCotizacionUnitaria(\'' + v.codigo + '\')">\ud83d\udce9 Solicitar cotizaci\u00f3n</button>';
   } else if (v.estado === 'RESERVADA') {
     rSec = isReadOnly()
       ? bloqueAgencia(v)
@@ -1454,9 +1485,11 @@ function openModal(codigo) {
           <button onclick="event.stopPropagation();ajustarZoom(-0.2)" style="background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.2);border-radius:5px;color:#fff;font-size:14px;width:28px;height:28px;cursor:pointer;line-height:1">−</button>
         </div>
       </div>`
-    : `<div class="modal-photo" style="cursor:pointer" onclick="triggerFotoUpload('${v.codigo}')" title="Click para subir foto">
+    : (isReadOnly()
+      ? `<div class="modal-photo"><div class="photo-placeholder"><div class="icon" style="font-size:44px">📷</div><p style="font-size:11px;margin-top:6px">Sin foto disponible</p></div></div>`
+      : `<div class="modal-photo" style="cursor:pointer" onclick="triggerFotoUpload('${v.codigo}')" title="Click para subir foto">
         <div class="photo-placeholder"><div class="icon" style="font-size:44px">📷</div><p style="font-size:11px;margin-top:6px">Click para subir foto</p></div>
-      </div>`;
+      </div>`);
 
   document.getElementById('modalBody').innerHTML =
     fotoVisor +
@@ -1471,7 +1504,7 @@ function openModal(codigo) {
   if (existingBody && liberarBtn && !isReadOnly()) existingBody.insertAdjacentHTML('beforeend', liberarBtn);
   if (existingBody) {
     // Segunda reserva badge
-    if (seg2Badge) existingBody.insertAdjacentHTML('beforeend', seg2Badge);
+    if (seg2Badge && !isReadOnly()) existingBody.insertAdjacentHTML('beforeend', seg2Badge);
     if (!isReadOnly()) {
     // Pre-reservar cuando termine (solo CONTRATADA)
     if (v.estado === 'CONTRATADA') {
@@ -1814,6 +1847,12 @@ function renderMapa(container) {
 
   container.innerHTML = `
     <div class="map-filter-bar">
+      <select class="filter" id="mapEstadoFilter" onchange="updateMapMarkers()">
+        <option value="">Todos los estados</option>
+        <option value="DISPONIBLE">🟠 Disponibles</option>
+        <option value="RESERVADA">🟡 Reservadas</option>
+        <option value="CONTRATADA">🔴 Contratadas</option>
+      </select>
       <select class="filter" id="mapCiudadFilter" onchange="updateMapMarkers()">
         <option value="">Todas las ciudades</option>
       </select>
@@ -1822,8 +1861,10 @@ function renderMapa(container) {
     <div class="map-legend">
       <div class="legend-item"><div class="legend-dot" style="background:#F4491A"></div> Disponible</div>
       <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Reservada</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> Contratada</div>
       <div class="legend-item" style="margin-left:auto;font-family:monospace;font-size:11px;color:var(--muted)" id="mapCount"></div>
     </div>
+    <div class="map-nota">Mapa de cobertura: muestra <b>todo</b> el inventario de Zazacorp y en qué estado está cada elemento. No muestra anunciantes ni valores. Donde dos elementos comparten el GPS — las dos caras de una valla — el punto sale partido en colores con el número de elementos; haz clic para ver cada cara.</div>
     <div id="mapContainer"></div>`;
 
   // Populate ciudad filter
@@ -1873,11 +1914,24 @@ function renderMapa(container) {
   }, 50);
 }
 
+function escH(x) {
+  return String(x == null ? '' : x)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Una valla con bloqueo de 48 h vigente cuenta como RESERVADA aunque su
+// columna de estado todavía diga DISPONIBLE.
+function estadoEfectivo(v) {
+  if (v.estado === 'CONTRATADA') return 'CONTRATADA';
+  return estaReservada(v) ? 'RESERVADA' : 'DISPONIBLE';
+}
+
 function getMarkerColor(v) {
-  if (estaReservada(v)) return '#f59e0b';
-  if (v.estado === 'DISPONIBLE') return '#F4491A';
-  if (v.estado === 'RESERVADA')  return '#f59e0b';
-  if (v.estado === 'CONTRATADA') return '#ef4444';
+  const e = estadoEfectivo(v);
+  if (e === 'RESERVADA')  return '#f59e0b';
+  if (e === 'CONTRATADA') return '#ef4444';
+  if (e === 'DISPONIBLE') return '#F4491A';
   return '#6b7280';
 }
 
@@ -1891,79 +1945,141 @@ function makeMarkerIcon(color) {
   });
 }
 
+// Círculo partido en tantos colores como elementos haya en el mismo punto,
+// con el número encima. Hay ubicaciones donde el GPS es idéntico porque son
+// las dos caras de una misma valla: así se ven las dos en vez de que una
+// tape a la otra.
+function makeGroupMarkerIcon(colores) {
+  const n = colores.length, paso = 360 / n;
+  const grad = colores.map((c, i) => c + ' ' + (i * paso) + 'deg ' + ((i + 1) * paso) + 'deg').join(',');
+  return L.divIcon({
+    className: '',
+    html: '<div style="position:relative;width:24px;height:24px;border-radius:50%;background:conic-gradient(' + grad + ');border:2px solid rgba(255,255,255,0.85);box-shadow:0 0 8px rgba(0,0,0,.5);cursor:pointer;display:flex;align-items:center;justify-content:center;font:800 11px sans-serif;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000">' + n + '</div>',
+    iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12]
+  });
+}
+
+// Globo de UN elemento. Deliberadamente NO lleva anunciante, cliente,
+// ejecutiva, valor ni comentarios: el mapa es informativo — muestra dónde
+// están los elementos y en qué estado, nada más.
+function mapPopupItem_(v, compacto) {
+  const est   = estadoEfectivo(v);
+  const color = getMarkerColor(v);
+  const bg    = est === 'DISPONIBLE' ? 'rgba(244,73,26,.15)'
+              : est === 'RESERVADA'  ? 'rgba(245,158,11,.15)'
+                                     : 'rgba(239,68,68,.12)';
+  const fotoTag = v.foto && String(v.foto).startsWith('http')
+    ? `<img src="${cloudinaryOptimizar(v.foto, 350)}" loading="lazy" decoding="async" style="width:100%;height:${compacto ? 70 : 100}px;object-fit:cover;border-radius:6px;margin-bottom:6px">`
+    : '';
+  const dir = escH(v.direccion);
+  const libera = (est === 'CONTRATADA' && v.termino)
+    ? `<p style="color:#f87171">Se libera el <b>${escH(v.termino)}</b></p>` : '';
+  const cd = (est === 'RESERVADA' && v.liberaEn)
+    ? `<p style="color:#b45309"><b>⏳ Tiempo restante 1ª reserva: ${textoCuentaRegresiva(v.liberaEn)}</b></p>` : '';
+  const cola = (est === 'RESERVADA' && v.enCola)
+    ? `<p style="color:#6d28d9"><b>🔔 Segunda reserva en cola</b></p>` : '';
+
+  return `<div style="${compacto ? 'display:flex;flex-direction:column;border:1px solid rgba(128,128,128,.28);border-radius:10px;padding:10px' : ''}">
+      ${fotoTag}
+      <div class="pop-estado" style="background:${bg};color:${color}${compacto ? ';align-self:flex-start' : ''}">${est}</div>
+      <h4>${escH(v.codigo)}</h4>
+      ${compacto ? '' : `<p>${dir.substring(0,80)}${dir.length>80?'...':''}</p>`}
+      <p><strong>${escH(v.tipo)}</strong> ${v.medidas ? '· '+escH(v.medidas) : ''}</p>
+      ${libera}${cd}${cola}
+      <button class="pop-btn" style="background:${color};color:${est==='DISPONIBLE'?'#000':'#fff'}${compacto ? ';margin-top:auto' : ''}" onclick="document.querySelector('.leaflet-popup-close-button').click();setTimeout(()=>openModal('${escH(v.codigo)}'),100)">
+        Ver detalle
+      </button>
+    </div>`;
+}
+
 let _markers = [];
+let _mapFirma = '', _mapPopupKey = null;
 function updateMapMarkers() {
   if (!_mapInstance) return;
-  _markers.forEach(m => m.remove());
-  _markers = [];
 
-  const search = (document.getElementById('mapSearch')?.value || '').toLowerCase();
-  const ciudadF = document.getElementById('mapCiudadFilter')?.value || '';
+  const search   = (document.getElementById('mapSearch')?.value || '').toLowerCase();
+  const ciudadF  = document.getElementById('mapCiudadFilter')?.value || '';
+  const estadoF  = document.getElementById('mapEstadoFilter')?.value || '';
 
-  // Esta versión solo muestra disponibilidad — nunca reservadas ni
-  // contratadas (eso no aporta valor a una agencia y solo genera ruido).
+  // El mapa muestra TODO el inventario — disponible, reservado y contratado —
+  // porque sirve para que la agencia vea el alcance real de Zazacorp y dónde
+  // están los elementos. Lo que nunca aparece es de quién es ni cuánto cuesta.
+  // La galería de Disponibles sigue listando solo disponibles y reservadas.
   let filtered = DATA.filter(v => {
-    // Igual que la galería: disponibles y reservadas. Las contratadas
-    // no llegan desde el backend, así que nunca aparecen en el mapa.
-    if (v.estado !== 'DISPONIBLE' && v.estado !== 'RESERVADA') return false;
     const lat = parseFloat(String(v.lat).replace(' ',''));
     const lon = parseFloat(String(v.lon).replace(' ',''));
     if (isNaN(lat) || isNaN(lon)) return false;
     if (lat < -5 || lat > 5) return false;
     if (lon < -82 || lon > -75) return false;
+    if (estadoF && estadoEfectivo(v) !== estadoF) return false;
     if (ciudadF && v.lugar !== ciudadF) return false;
-    if (search && !v.codigo.toLowerCase().includes(search) && !v.direccion.toLowerCase().includes(search)) return false;
+    if (search && !String(v.codigo).toLowerCase().includes(search)
+               && !String(v.direccion).toLowerCase().includes(search)) return false;
     return true;
   });
 
-  document.getElementById('mapCount').textContent = filtered.length + ' elementos';
+  // Conteo por estado, para que se vea de un golpe cuánto hay libre.
+  const porEstado = { DISPONIBLE: 0, RESERVADA: 0, CONTRATADA: 0 };
+  filtered.forEach(v => { porEstado[estadoEfectivo(v)]++; });
+  const cEl = document.getElementById('mapCount');
+  if (cEl) cEl.textContent = filtered.length + ' elementos · '
+    + porEstado.DISPONIBLE + ' disp · ' + porEstado.RESERVADA + ' resv · ' + porEstado.CONTRATADA + ' contr';
 
+  // Si nada de lo que se ve cambió, no se tocan los marcadores: antes cada
+  // refresco en segundo plano los borraba y volvía a crear, y eso cerraba
+  // el globo que estuvieras leyendo.
+  const firma = filtered.map(v => [v.codigo, estadoEfectivo(v), v.termino, v.liberaEn, v.enCola, v.lat, v.lon].join('~')).join('^');
+  if (firma === _mapFirma && _markers.length) return;
+  _mapFirma = firma;
+  _markers.forEach(m => m.remove());
+  _markers = [];
+
+  // Elementos con las MISMAS coordenadas (caras A y B de una valla) se
+  // agrupan en un solo punto.
+  const grupos = {};
   filtered.forEach(v => {
     const lat = parseFloat(String(v.lat).replace(' ',''));
     const lon = parseFloat(String(v.lon).replace(' ',''));
-    const color = getMarkerColor(v);
-
-    const marker = L.marker([lat, lon], { icon: makeMarkerIcon(color) });
-
-    const fotoTag = v.foto && String(v.foto).startsWith('http')
-      ? `<img src="${cloudinaryOptimizar(v.foto, 300)}" loading="lazy" decoding="async" style="width:100%;height:100px;object-fit:cover;border-radius:6px;margin-bottom:6px">` : '';
-    const rsv = estaReservada(v);
-    const colorPop = rsv ? '#f59e0b' : '#10b981';
-    const popupHtml = `<div class="map-popup">
-      ${fotoTag}
-      <div class="pop-estado" style="background:${rsv ? 'rgba(245,158,11,.15)' : 'rgba(16,185,129,.15)'};color:${colorPop}">${rsv ? 'RESERVADA' : 'DISPONIBLE'}</div>
-      <h4>${v.codigo}</h4>
-      <p>${v.direccion.substring(0,80)}${v.direccion.length>80?'...':''}</p>
-      <p><strong>${v.tipo}</strong> ${v.medidas ? '· '+v.medidas : ''}</p>
-      ${rsv && v.liberaEn ? `<p style="color:#b45309"><b>⏳ Tiempo restante 1ª reserva: ${textoCuentaRegresiva(v.liberaEn)}</b></p>` : ''}
-      ${rsv && v.enCola ? `<p style="color:#6d28d9"><b>🔔 Segunda reserva en cola</b></p>` : ''}
-      <button class="pop-btn" style="background:${colorPop};color:#000" onclick="document.querySelector('.leaflet-popup-close-button').click();setTimeout(()=>openModal('${v.codigo}'),100)">
-        Ver detalle
-      </button>
-    </div>`;
-
-    marker.bindPopup(popupHtml, { maxWidth: 240 });
-    marker.addTo(_mapInstance);
-    _markers.push(marker);
+    const k = lat.toFixed(5) + ',' + lon.toFixed(5);
+    (grupos[k] = grupos[k] || { lat, lon, items: [] }).items.push(v);
   });
 
-  // Auto-fit bounds SOLO la primera vez que se cargan marcadores en este
-  // mapa (no en cada refresco de datos en segundo plano, que era lo que
-  // te reseteaba el zoom/posición constantemente).
-  if (!_mapaYaEncuadrado && filtered.length > 0 && filtered.length < 200) {
+  Object.values(grupos).forEach(g => {
+    const items = g.items.slice().sort((x, y) => String(x.codigo).localeCompare(String(y.codigo)));
+    const unico = items.length === 1;
+    const marker = L.marker([g.lat, g.lon], {
+      icon: unico ? makeMarkerIcon(getMarkerColor(items[0]))
+                  : makeGroupMarkerIcon(items.map(getMarkerColor))
+    });
+
+    if (unico) {
+      marker.bindPopup('<div class="map-popup">' + mapPopupItem_(items[0], false) + '</div>', { maxWidth: 240 });
+    } else {
+      marker.bindPopup('<div class="map-popup" style="width:min(500px,76vw)">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px">' +
+        items.length + ' elementos en este punto</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px;max-height:min(460px,60vh);overflow-y:auto;padding:2px">' +
+        items.map(v => mapPopupItem_(v, true)).join('') + '</div></div>',
+        { maxWidth: 520, minWidth: 260 });
+    }
+
+    const claveGrupo = items.map(v => v.codigo).join('|');
+    marker.on('popupopen',  () => { _mapPopupKey = claveGrupo; });
+    marker.on('popupclose', () => { if (_mapPopupKey === claveGrupo) _mapPopupKey = null; });
+    marker.addTo(_mapInstance);
+    _markers.push(marker);
+    if (_mapPopupKey === claveGrupo) marker.openPopup();
+  });
+
+  // Auto-encuadre SOLO la primera vez (no en cada refresco en segundo plano,
+  // que era lo que reseteaba el zoom).
+  if (!_mapaYaEncuadrado && _markers.length > 0) {
     try {
-      const group = L.featureGroup(_markers);
-      _mapInstance.fitBounds(group.getBounds().pad(0.1));
+      _mapInstance.fitBounds(L.featureGroup(_markers).getBounds().pad(0.1));
       _mapaYaEncuadrado = true;
     } catch(e) {}
   }
 }
-
-
-
-
-
-
 
 
 // ── RESERVA MÚLTIPLE ──────────────────────────────────────────
