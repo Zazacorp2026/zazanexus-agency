@@ -285,6 +285,11 @@
   .map-legend{display:flex;gap:14px;flex-wrap:wrap;padding:12px 0 14px;}
   .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);}
   .legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+  .map-switch{position:relative;display:flex;background:rgba(15,18,25,.88);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px;box-shadow:0 2px 10px rgba(0,0,0,.45);backdrop-filter:blur(4px);}
+  .map-switch button{position:relative;z-index:1;border:none;background:transparent;color:#cbd5e1;font:700 12px 'Space Grotesk',sans-serif;padding:7px 14px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:6px;min-width:96px;justify-content:center;transition:color .2s;}
+  .map-switch .ms-thumb{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:999px;background:#f59e0b;transition:transform .25s cubic-bezier(.4,0,.2,1);}
+  .map-switch:not(.calles) .ms-thumb{transform:translateX(100%);}
+  .map-switch.calles button[data-v="calles"],.map-switch:not(.calles) button[data-v="satelite"]{color:#111827;}
   .map-popup{font-family:'Space Grotesk',sans-serif!important;min-width:200px;}
   .map-popup h4{font-size:12px;font-weight:700;margin-bottom:4px;color:#1a1d24;}
   .map-popup p{font-size:11px;color:#555;margin:2px 0;line-height:1.4;}
@@ -1876,39 +1881,54 @@ function renderMapa(container) {
   // refresco de datos reseteaba el zoom/posición que el usuario ya tenía)
   setTimeout(() => {
     if (_mapInstance) { _mapInstance.remove(); _mapInstance = null; }
-    _mapaYaEncuadrado = false;
+    // Al destruir el mapa hay que soltar también los marcadores y la firma:
+    // si no, el atajo de updateMapMarkers cree que ya están dibujados y el
+    // mapa nuevo se queda vacío.
+    _mapaYaEncuadrado = false; _mapFirma = ''; _markers = []; _mapPopupKey = null;
     _mapInstance = L.map('mapContainer', { zoomControl: true }).setView([-1.8312, -78.1834], 7);
 
-    // Tres capas base — el usuario elige con el selector de capas de Leaflet
-    // (ícono de capas, esquina superior derecha del mapa):
-    //  - Oscuro: el estilo de siempre.
-    //  - Calles: OpenStreetMap estándar, que YA trae dibujados íconos de
-    //    farmacias, restaurantes, bancos, tiendas, etc. — sin depender de
-    //    ninguna consulta externa que pueda fallar.
-    //  - Satélite: imágenes satelitales reales (Esri, gratis) con nombres
-    //    de calles y lugares superpuestos — el equivalente a "vista híbrida"
-    //    de Google Maps.
-    const capaOscura = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
-    });
+    // Dos capas base, con el mismo interruptor deslizante que Nexus
+    // (arriba a la derecha del mapa):
+    //  - Calles: OpenStreetMap estándar, que ya trae dibujados íconos de
+    //    farmacias, restaurantes, bancos y tiendas.
+    //  - Satélite: imágenes reales (Esri) con los nombres de calles y
+    //    lugares superpuestos, el equivalente a la vista híbrida de Google.
     const capaCalles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap', subdomains: 'abc', maxZoom: 19
+      attribution: '\u00a9 OpenStreetMap', subdomains: 'abc', maxZoom: 19
     });
     const capaSatelite = L.layerGroup([
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: '© Esri', maxZoom: 19
+        attribution: '\u00a9 Esri', maxZoom: 19
       }),
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19
       })
     ]);
+    let vista = 'satelite';
+    try { vista = localStorage.getItem('zz_mapa_vista') === 'calles' ? 'calles' : 'satelite'; } catch (e) {}
+    (vista === 'calles' ? capaCalles : capaSatelite).addTo(_mapInstance);
 
-    capaCalles.addTo(_mapInstance);
-    L.control.layers({
-      '🗺️ Calles': capaCalles,
-      '🌙 Oscuro': capaOscura,
-      '🛰️ Satélite': capaSatelite
-    }, null, { position: 'topright' }).addTo(_mapInstance);
+    const InterruptorVista = L.Control.extend({
+      options: { position: 'topright' },
+      onAdd: function () {
+        const el = L.DomUtil.create('div', 'map-switch' + (vista === 'calles' ? ' calles' : ''));
+        el.innerHTML = '<span class="ms-thumb"></span>' +
+          '<button type="button" data-v="calles" aria-label="Vista de calles"><span>\ud83d\uddfa\ufe0f</span> Calles</button>' +
+          '<button type="button" data-v="satelite" aria-label="Vista sat\u00e9lite"><span>\ud83d\udef0\ufe0f</span> Sat\u00e9lite</button>';
+        L.DomEvent.disableClickPropagation(el);
+        el.addEventListener('click', function (ev) {
+          const btn = ev.target.closest('button'); if (!btn) return;
+          const nueva = btn.dataset.v; if (nueva === vista) return;
+          _mapInstance.removeLayer(vista === 'calles' ? capaCalles : capaSatelite);
+          (nueva === 'calles' ? capaCalles : capaSatelite).addTo(_mapInstance);
+          vista = nueva;
+          el.classList.toggle('calles', vista === 'calles');
+          try { localStorage.setItem('zz_mapa_vista', vista); } catch (e) {}
+        });
+        return el;
+      }
+    });
+    new InterruptorVista().addTo(_mapInstance);
 
     updateMapMarkers();
   }, 50);
