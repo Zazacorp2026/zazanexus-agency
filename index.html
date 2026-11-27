@@ -54,7 +54,34 @@
   .tab:hover{color:var(--text);background:var(--surface2);}
   .tab.active{background:var(--bg);color:var(--accent);border-color:var(--border);border-bottom-color:var(--bg);}
   .tab-badge{display:inline-block;margin-left:6px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;line-height:1;padding:3px 6px;border-radius:99px;vertical-align:2px;}
-  .toolbar{display:flex;gap:10px;padding:14px 24px;align-items:center;flex-wrap:wrap;background:var(--bg);border-bottom:1px solid var(--border);}
+  .toolbar{display:flex;flex-direction:column;gap:9px;padding:13px 24px;background:var(--bg);border-bottom:1px solid var(--border);}
+  .tb-fila{display:flex;gap:9px;align-items:center;flex-wrap:wrap;}
+  .tb-acciones{padding-top:9px;border-top:1px solid var(--border);}
+  .tb-empuje{flex:1;}
+  /* Botones de la barra: todos neutros menos uno. El acento naranja se
+     reserva para la unica accion principal (Exportar), que antes competia
+     con otros tres botones de colores distintos. */
+  .tb-btn{background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11.5px;font-weight:600;padding:7px 13px;cursor:pointer;font-family:'Space Grotesk',sans-serif;white-space:nowrap;display:flex;align-items:center;gap:6px;transition:all .18s;}
+  .tb-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .tb-btn:disabled{opacity:.55;cursor:default;}
+  .tb-btn-acento{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.45);color:var(--accent);}
+  .tb-btn-acento:hover{background:rgba(245,158,11,.22);}
+  .tb-btn.activo{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);color:#ef4444;}
+  .tb-menu{position:relative;}
+  .tb-drop{display:none;position:absolute;top:calc(100% + 5px);right:0;min-width:210px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px;z-index:120;box-shadow:0 14px 34px rgba(0,0,0,.55);}
+  .tb-menu.open .tb-drop{display:block;}
+  .tb-drop button{display:block;width:100%;text-align:left;background:none;border:none;border-radius:7px;color:var(--text);font-size:12px;padding:9px 11px;cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:background .15s;}
+  .tb-drop button:hover{background:var(--surface2);color:var(--accent);}
+  /* Filtro de fecha: gris mientras no se usa, naranja cuando esta puesto.
+     Antes gritaba en naranja siempre, aunque estuviera vacio. */
+  .fecha-filtro{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 5px 4px 11px;transition:all .18s;}
+  .fecha-filtro.activo{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.5);}
+  .ff-label{font-size:11.5px;color:var(--muted);font-weight:600;white-space:nowrap;}
+  .fecha-filtro.activo .ff-label{color:var(--accent);}
+  .ff-sel{color-scheme:dark;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11.5px;font-weight:600;padding:5px 6px;font-family:'Space Grotesk',sans-serif;cursor:pointer;}
+  .ff-sel:hover{border-color:var(--accent);}
+  .ff-quitar{background:none;border:none;color:var(--muted);font-size:13px;padding:3px 7px;cursor:pointer;border-radius:6px;line-height:1;}
+  .ff-quitar:hover{color:#ef4444;background:rgba(239,68,68,.12);}
   .search-box{flex:1;min-width:200px;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;color:var(--text);font-size:13px;font-family:'Space Grotesk',sans-serif;outline:none;transition:border-color .2s;}
   .search-box:focus{border-color:var(--accent);}
   .search-box::placeholder{color:var(--muted);}
@@ -76,7 +103,7 @@
   .mf-clear{padding:6px 12px;font-size:11px;color:var(--muted);cursor:pointer;text-align:center;transition:color .12s;}
   .mf-clear:hover{color:var(--accent);}
   .count-badge{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);padding:5px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;white-space:nowrap;}
-  .view-toggle{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px;margin-left:auto;}
+  .view-toggle{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px;}
   .view-btn{padding:5px 11px;border-radius:5px;cursor:pointer;font-size:11px;color:var(--muted);transition:all .2s;border:none;background:none;font-family:'Space Grotesk',sans-serif;}
   .view-btn.active{background:var(--surface2);color:var(--text);}
   .content{padding:18px 24px;max-width:1600px;margin:0 auto;}
@@ -391,7 +418,6 @@
     .tabs::-webkit-scrollbar{display:none;}
     .tab{white-space:nowrap;flex-shrink:0;font-size:12px;padding:8px 12px;}
 
-    .toolbar{padding:10px 12px;flex-direction:column;align-items:stretch;}
     .search-box{min-width:0;max-width:none;width:100%;}
     .multi-filter{width:100%;}
     .mf-btn{width:100%;justify-content:space-between;}
@@ -399,10 +425,17 @@
     /* En el celular el recuadro de fecha se parte en dos lineas: con el
        rotulo y los tres desplegables en una sola fila, la pantalla se iba
        de ancho y aparecia scroll horizontal en toda la pagina. */
-    #filtroMesWrap{flex-wrap:wrap;}
-    #filtroMesWrap > span{width:100%;}
-    #filtroMesWrap > select{flex:1;min-width:0;}
-    .view-toggle{margin-left:0;justify-content:center;}
+    .toolbar{padding:10px 12px;}
+    .tb-fila{flex-direction:column;align-items:stretch;}
+    .fecha-filtro{flex-wrap:wrap;padding:8px 10px;}
+    .fecha-filtro .ff-label{width:100%;}
+    .fecha-filtro .ff-sel{flex:1;min-width:0;}
+    .tb-empuje{display:none;}
+    .tb-acciones .count-badge{text-align:center;}
+    .tb-menu,.tb-btn{width:100%;}
+    .tb-btn{justify-content:center;}
+    .tb-drop{right:auto;left:0;width:100%;}
+    .view-toggle{justify-content:center;}
     .map-filter-bar .search-box{max-width:none !important;}
 
     .content{padding:12px;}
@@ -505,39 +538,55 @@
 </div>
 
 <div class="toolbar" id="mainToolbar">
-  <input type="text" class="search-box" placeholder="🔍  Código, dirección..." id="searchInput" oninput="applyFilters()">
-  <div class="multi-filter" id="mf-ciudad">
-    <button class="mf-btn" onclick="toggleMF('mf-ciudad')">Todas las ciudades <span class="mf-arrow">▾</span></button>
-    <div class="mf-drop"></div>
+
+  <!-- Fila 1 — buscar y filtrar. Todo con el mismo peso visual: son
+       controles, no acciones, y antes competían con los botones. -->
+  <div class="tb-fila">
+    <input type="text" class="search-box" placeholder="🔍  Código, dirección..." id="searchInput" oninput="applyFilters()">
+    <div class="multi-filter" id="mf-ciudad">
+      <button class="mf-btn" onclick="toggleMF('mf-ciudad')">Todas las ciudades <span class="mf-arrow">▾</span></button>
+      <div class="mf-drop"></div>
+    </div>
+    <div class="multi-filter" id="mf-tipo">
+      <button class="mf-btn" onclick="toggleMF('mf-tipo')">Todos los tipos <span class="mf-arrow">▾</span></button>
+      <div class="mf-drop"></div>
+    </div>
+    <div class="fecha-filtro" id="filtroMesWrap" style="display:none" title="Muestra también las que se liberan a tiempo para esa fecha">
+      <span class="ff-label">📅 Libre desde</span>
+      <select id="selDiaDisp" class="ff-sel" onchange="aplicarFiltroMesSel()" title="Día exacto (opcional)">
+        <option value="">Día</option>
+      </select>
+      <select id="selMesDisp" class="ff-sel" onchange="aplicarFiltroMesSel()">
+        <option value="">Mes</option>
+      </select>
+      <select id="selAnioDisp" class="ff-sel" onchange="aplicarFiltroMesSel()">
+        <option value="">Año</option>
+      </select>
+      <button id="btnClearMes" class="ff-quitar" onclick="limpiarFiltroMes()" title="Quitar el filtro de fecha" style="display:none">✕</button>
+    </div>
+    <label class="chk-pill" id="chkMostrarReservadasWrap" style="display:none">
+      <input type="checkbox" id="chkMostrarReservadas" checked onchange="toggleMostrarReservadasDisp(this.checked)" style="cursor:pointer">
+      Mostrar reservadas
+    </label>
   </div>
-  <div class="multi-filter" id="mf-tipo">
-    <button class="mf-btn" onclick="toggleMF('mf-tipo')">Todos los tipos <span class="mf-arrow">▾</span></button>
-    <div class="mf-drop"></div>
-  </div>
-  <span class="count-badge" id="countBadge">–</span>
-  <button id="btnExportPPT" onclick="exportarPPT()" style="display:none;align-items:center;gap:6px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;color:var(--accent);font-size:11px;font-weight:700;padding:7px 12px;cursor:pointer;font-family:'Space Grotesk',sans-serif;white-space:nowrap;transition:all .2s" onmouseover="this.style.background='rgba(245,158,11,.25)'" onmouseout="this.style.background='rgba(245,158,11,.12)'"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/></svg> Exportar PPT</button>
-  <button id="btnMultiSelect" onclick="toggleMultiSelect()" style="display:none;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);border-radius:8px;color:#3b82f6;font-size:11px;font-weight:700;padding:7px 14px;cursor:pointer;font-family:'Space Grotesk',sans-serif;white-space:nowrap;transition:all .2s" onmouseover="this.style.background='rgba(59,130,246,.25)'" onmouseout="this.style.background='rgba(59,130,246,.12)'">☐ Seleccionar para exportar</button>
-  <div id="filtroMesWrap" style="display:none;align-items:center;gap:8px;background:rgba(245,158,11,.12);border:1px solid var(--accent);border-radius:10px;padding:6px 10px">
-    <span style="font-size:12px;color:var(--accent);font-weight:700;white-space:nowrap">📅 Disponibles a partir de (día exacto o solo mes):</span>
-    <select id="selDiaDisp" onchange="aplicarFiltroMesSel()" title="Día exacto (opcional)" style="color-scheme:dark;background:var(--surface);border:1px solid var(--accent);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;padding:7px 9px;font-family:'Space Grotesk',sans-serif;cursor:pointer">
-      <option value="">Día...</option>
-    </select>
-    <select id="selMesDisp" onchange="aplicarFiltroMesSel()" style="color-scheme:dark;background:var(--surface);border:1px solid var(--accent);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;padding:7px 9px;font-family:'Space Grotesk',sans-serif;cursor:pointer">
-      <option value="">Mes...</option>
-    </select>
-    <select id="selAnioDisp" onchange="aplicarFiltroMesSel()" style="color-scheme:dark;background:var(--surface);border:1px solid var(--accent);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;padding:7px 9px;font-family:'Space Grotesk',sans-serif;cursor:pointer">
-      <option value="">Año...</option>
-    </select>
-    <button id="btnClearMes" onclick="limpiarFiltroMes()" style="display:none;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);border-radius:6px;color:#ef4444;font-size:11px;font-weight:700;padding:6px 9px;cursor:pointer">✕ Quitar</button>
-  </div>
-  <label class="chk-pill" id="chkMostrarReservadasWrap" style="display:none">
-    <input type="checkbox" id="chkMostrarReservadas" checked onchange="toggleMostrarReservadasDisp(this.checked)" style="cursor:pointer">
-    Mostrar reservadas
-  </label>
-  <button id="btnExcelDisp" onclick="exportarExcelDisponibles()" style="display:none;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.35);border-radius:8px;color:#4ade80;font-size:11px;font-weight:700;padding:7px 12px;cursor:pointer;font-family:'Space Grotesk',sans-serif;white-space:nowrap;transition:all .2s" onmouseover="this.style.background='rgba(74,222,128,.18)'" onmouseout="this.style.background='rgba(74,222,128,.08)'">⬇ Exportar Excel</button>
-  <div class="view-toggle" id="viewToggle" style="display:none">
-    <button class="view-btn active" onclick="setView('grid',this)">⊞ Galería</button>
-    <button class="view-btn" onclick="setView('table',this)">≡ Tabla</button>
+
+  <!-- Fila 2 — qué estoy viendo y qué me llevo. Un solo botón naranja:
+       el resto son controles secundarios. -->
+  <div class="tb-fila tb-acciones" id="tbAcciones" style="display:none">
+    <span class="count-badge" id="countBadge">–</span>
+    <span class="tb-empuje"></span>
+    <button id="btnMultiSelect" class="tb-btn" onclick="toggleMultiSelect()">☐ Seleccionar</button>
+    <div class="tb-menu" id="menuExportar">
+      <button class="tb-btn tb-btn-acento" onclick="toggleMenuExportar(event)">⬇ Exportar <span class="mf-arrow">▾</span></button>
+      <div class="tb-drop">
+        <button id="btnExportPPT" onclick="exportarPPT()">📑 Presentación (PPT)</button>
+        <button id="btnExcelDisp" onclick="exportarExcelDisponibles()">📊 Hoja de cálculo (Excel)</button>
+      </div>
+    </div>
+    <div class="view-toggle" id="viewToggle">
+      <button class="view-btn active" onclick="setView('grid',this)">⊞ Galería</button>
+      <button class="view-btn" onclick="setView('table',this)">≡ Tabla</button>
+    </div>
   </div>
 </div>
 
@@ -1053,18 +1102,27 @@ function onDataLoaded() {
   populateFilters();
   updateStats();
   computeNuevosHoy();
-  // Mostrar botones según el tab activo
-  const t = state.tab;
-  const pptBtn   = document.getElementById('btnExportPPT');
-  const msBtn    = document.getElementById('btnMultiSelect');
-  if (pptBtn)   pptBtn.style.display   = t === 'disponibles' ? 'inline-flex' : 'none';
-  if (msBtn)    msBtn.style.display    = t === 'disponibles' ? 'block' : 'none';
-  mostrarControlesGaleria_(t);
+  mostrarControlesGaleria_(state.tab);
   render();
 }
 
 // El check "Mostrar reservadas", el Excel y el selector Galería/Tabla solo
 // tienen sentido donde hay una lista de elementos.
+// Menú Exportar: un solo botón en la barra en vez de dos sueltos de
+// colores distintos.
+function toggleMenuExportar(ev) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById('menuExportar');
+  if (m) m.classList.toggle('open');
+}
+function cerrarMenuExportar_() {
+  const m = document.getElementById('menuExportar');
+  if (m) m.classList.remove('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#menuExportar')) cerrarMenuExportar_();
+});
+
 function mostrarControlesGaleria_(t) {
   const esLista = (t === 'disponibles' || t === 'nuevos');
   // Ojo: el recuadro de fecha solo se mostraba dentro de switchTab, y
@@ -1075,10 +1133,13 @@ function mostrarControlesGaleria_(t) {
   if (mes) mes.style.display = t === 'disponibles' ? 'flex' : 'none';
   const chk = document.getElementById('chkMostrarReservadasWrap');
   if (chk) chk.style.display = t === 'disponibles' ? 'flex' : 'none';
-  const vt = document.getElementById('viewToggle');
-  if (vt) vt.style.display = esLista ? 'flex' : 'none';
-  const xls = document.getElementById('btnExcelDisp');
-  if (xls) xls.style.display = esLista ? 'block' : 'none';
+  // La fila de acciones entera (contador, seleccionar, exportar, vista)
+  // solo existe donde hay una lista de elementos.
+  const acciones = document.getElementById('tbAcciones');
+  if (acciones) acciones.style.display = esLista ? 'flex' : 'none';
+  const sel = document.getElementById('btnMultiSelect');
+  if (sel) sel.style.display = t === 'disponibles' ? 'flex' : 'none';
+  cerrarMenuExportar_();
 }
 
 // ── CACHÉ ────────────────────────────────────────────────────
@@ -1267,15 +1328,11 @@ function switchTab(t) {
   if (mainToolbar) mainToolbar.style.display = (t === 'mapa' || t === 'clientes') ? 'none' : '';
   const tiposTodos = [...new Set(DATA.map(v => v.tipo).filter(Boolean))].sort();
   buildMF('mf-tipo', tiposTodos, 'filterTipo', 'Todos los tipos');
-  const pptBtn = document.getElementById('btnExportPPT');
-  if (pptBtn) pptBtn.style.display = t === 'disponibles' ? 'inline-flex' : 'none';
   const mesWrap = document.getElementById('filtroMesWrap');
   if (mesWrap) mesWrap.style.display = t === 'disponibles' ? 'flex' : 'none';
   if (t !== 'disponibles') { limpiarFiltroMes(true); }
   mostrarControlesGaleria_(t);
-  const msBtn = document.getElementById('btnMultiSelect');
-  if (msBtn) msBtn.style.display = t === 'disponibles' ? 'block' : 'none';
-  if (t !== 'disponibles') { multiSelectMode = false; selectedVallas.clear(); updateFloatingBtn(); }
+  if (t !== 'disponibles' && multiSelectMode) { toggleMultiSelect(); }
   render();
 }
 
@@ -1289,6 +1346,8 @@ function aplicarFiltroMes(val, valDia) {
   state.page = 1;
   const btn = document.getElementById('btnClearMes');
   if (btn) btn.style.display = (val || valDia) ? 'block' : 'none';
+  const caja = document.getElementById('filtroMesWrap');
+  if (caja) caja.classList.toggle('activo', !!(val || valDia));
   render();
 }
 
@@ -1349,6 +1408,8 @@ function limpiarFiltroMes(silent) {
   if (selDia) selDia.value = '';
   const btn = document.getElementById('btnClearMes');
   if (btn) btn.style.display = 'none';
+  const caja = document.getElementById('filtroMesWrap');
+  if (caja) caja.classList.remove('activo');
   if (!silent) { state.page = 1; render(); }
 }
 
@@ -2226,10 +2287,8 @@ function toggleMultiSelect() {
   updateFloatingBtn();
   const btn = document.getElementById('btnMultiSelect');
   if (btn) {
-    btn.textContent = multiSelectMode ? '✕ Cancelar selección' : '☐ Seleccionar para exportar';
-    btn.style.background = multiSelectMode ? 'rgba(239,68,68,.12)' : 'rgba(59,130,246,.12)';
-    btn.style.borderColor = multiSelectMode ? 'rgba(239,68,68,.35)' : 'rgba(59,130,246,.35)';
-    btn.style.color = multiSelectMode ? '#ef4444' : '#3b82f6';
+    btn.textContent = multiSelectMode ? '✕ Cancelar selección' : '☐ Seleccionar';
+    btn.classList.toggle('activo', multiSelectMode);
   }
   render();
 }
@@ -2416,8 +2475,9 @@ const LOGO_NARANJA= 'image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA7oAAAKKCAYAAAATCS
 // ── Exportar PPT Inventario completo ────────────────────────
 // ── Exportar Excel Inventario ────────────────────────────────
 async function exportarExcelDisponibles() {
+  cerrarMenuExportar_();
   const btn = document.getElementById('btnExcelDisp');
-  const textoOriginal = btn.textContent;
+  const textoOriginal = '📊 Hoja de cálculo (Excel)';
   btn.textContent = '⏳ Generando...'; btn.disabled = true;
   try {
     if (typeof XLSX === 'undefined') {
@@ -2469,6 +2529,7 @@ async function exportarExcelDisponibles() {
 }
 
 async function exportarPPT() {
+  cerrarMenuExportar_();
   const btn = document.getElementById('btnExportPPT');
   btn.textContent = '⏳ Generando...';
   btn.disabled = true;
@@ -2607,7 +2668,7 @@ async function exportarPPT() {
     showToast('❌ Error: ' + err.message, 'error');
     console.error(err);
   } finally {
-    btn.textContent = '⬇ Exportar PPT';
+    btn.textContent = '📑 Presentación (PPT)';
     btn.disabled = false;
   }
 }
